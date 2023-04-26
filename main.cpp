@@ -4,11 +4,16 @@
 #include <map>
 #include <functional>
 #include <tuple>
-#include "Kalmanfilter.hpp"
-#include "matrix.hpp"
-#include "data.hpp"
-#include "discreteBayesFilter.hpp"
-#include "train.hpp"
+#include "Chapter1/Kalmanfilter.hpp"
+#include "Core/matrix.hpp"
+#include "Core/constmatrix.hpp"
+#include "Core/data.hpp"
+#include "Chapter2/discreteBayesFilter.hpp"
+#include "Chapter2/train.hpp"
+#include "Chapter3/probabilities.hpp"
+#include "Core/matplotlibcpp.h"
+#include "Chapter4/onedimension.hpp"
+#include "Chapter4/dogsimulation.hpp"
 
 using namespace robotics;
 
@@ -30,11 +35,11 @@ int main()
 
     /*basketball HEIGHT*/
 
-    Matrix<double,1,2> meanHeight = meanColumnwise(basketballHeight);
-    std::cout<< meanHeight <<std::endl;
+    // Matrix<double,1,2> meanHeight = meanColumnwise(basketballHeight);
+    // std::cout<< meanHeight <<std::endl;
 
-    Matrix<double,1,2> standarDeviation = standardDeviationColumnwise(basketballHeight);
-    std::cout<< standarDeviation<< std::endl;
+    // Matrix<double,1,2> standarDeviation = standardDeviationColumnwise(basketballHeight);
+    // std::cout<< standarDeviation<< std::endl;
 
     /*Usually, measurement errors are distributed normally.
     The Kalman Filter design assumes a normal distribution of the measurement errors.
@@ -111,7 +116,7 @@ int main()
     std::cout << " radar estimates "<< radarEstimdates << std::endl;
 
 
-    // DISCRETE BAYES FILTER
+    // CHAPTER 2 -----------   DISCRETE BAYES FILTER------------------------------------
     std::cout << " pos "<< pos << std::endl;
     std::cout << " halway_map " << hallway_map<<std::endl;
 
@@ -197,6 +202,122 @@ int main()
     sensorAccuracy=0.9;
     train_filter(train_iterations,newKernel,sensorAccuracy,train_move_distance,true);
 
-    return 0;  
+ 
+
+    // CHAPTER 3 ------------------------------------------------------
+    constexpr size_t numberOfElements = 1000;
+    auto mGR = generateRandomNumbers<numberOfElements>();
+    //std::cout << mGR << std::endl;
+
+    // EXPECTED VALUE   p_i*X_i for i 1 to N
+    double total = 0;
+    for(size_t idx=0; idx<numberOfElements;++idx){
+        if(mGR.at(0,idx)<=0.8){ // 0.8 probability of being 1
+            total+=1;
+        }else if(mGR.at(0,idx)<=0.95){ // .15 probability of being 3
+            total+=3;
+        }else{ // 0.05 probability of being 5
+            total+=5;
+        }
+    }
+    std::cout << total/numberOfElements<<std::endl;
+    
+    // mean and variance
+    constexpr ConstMatrix<double, 3, 3> m{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
+    constexpr double sum1 = MatrixSumUnroll(m);
+    std::cout << " sum matrix  " << sum1 << std::endl;
+    constexpr double itsmean = mean(m);
+    std::cout << " mean "<< itsmean << std::endl;
+    constexpr ConstMatrix<double,1,5> X{{1.8, 2.0, 1.7, 1.9, 1.6}};
+    constexpr ConstMatrix<double,1,5> Y{{2.2, 1.5, 2.3, 1.7, 1.3}};
+    constexpr ConstMatrix<double,1,5> Z{{1.8, 1.8, 1.8, 1.8, 1.8}};
+    constexpr double Xmean = mean(X);
+    constexpr double Ymean = mean(Y);
+    constexpr double Zsmean = mean(Z);
+    std::cout << "X mean "<< Xmean << std::endl;
+    constexpr double itsSquare = square(X,Xmean);
+    constexpr double Xvariance = variance(X);
+    std::cout << " X variance "<< Xvariance << std::endl;
+    constexpr double XstdDev = standardDeviation(X);
+    std::cout << " x stddev "<< XstdDev << std::endl;
+
+    // gaussian 
+     const double lower_limit =21.5;
+    const double upper_limit =22.5;
+    const double mu=22;
+    const double sigma=2;
+
+    const double cdf = gaussianIntegral(lower_limit,upper_limit,mu,sigma);
+    std::cout << " cdf " << cdf << std::endl;
+
+    // putting all together
+    Matrix<double,1,10> itsPrior{{4, 2, 0, 7, 2, 12, 35, 20, 3, 2}};
+    itsPrior = itsPrior/itsPrior.sum();
+    Matrix<double,1,10> likelihood{{3, 4, 1, 4, 2, 38, 20, 18, 1, 16}};
+    likelihood=likelihood/likelihood.sum();
+
+    auto itsPosterior = update(likelihood,itsPrior);
+    std::cout << "update " << update(likelihood,itsPrior) << std::endl;
+    std::cout << "itsPosterior " << itsPosterior<< std::endl;
+
+    auto meanVar = mean_var(itsPosterior);
+
+    std::cout << "mean " << meanVar.first << " variance " << meanVar.second << std::endl;
+
+    // date age preference 
+    // votes for data
+    Matrix<double,1,10> dateAge{{0,0,13,43,38,14,8,0,0,0}};
+    pollAnalysisAge(dateAge);
+    std::cout << " tiktok ad" << std::endl;
+    Matrix<double,1,10> tiktokAd{{0,12,32,21,15,15,5,0,0,0}};  
+    pollAnalysisAge(tiktokAd); 
+
+
+    // CHAPTER 4   -----------------------------------------
+    namespace plt = matplotlibcpp;
+    double itsMean = 10.0;
+    double variance = 1.0;
+    std::vector<double> xlim{4,16};
+    //plot_gaussian_pdf(itsMean,variance,xlim);
+    //plt::show();
+
+    constexpr size_t nElements = 500;
+    auto xs = range(nElements);
+    auto ys = randn(nElements)*0.1+10;
+    // plt::plot(xs,ys);
+    // plt::show();
+    std::cout << mean(ys)<< std::endl;
+
+    auto g1 = gaussianS(10, pow(0.2,2));
+    auto g2 = gaussianS(15, pow(0.7,2));
+    auto g3 = predict(g1,g2);
+
+    std::cout << g3 << std::endl;
+
+    std::cout << g1*g2<<std::endl;
+
+    auto predicted_pos = gaussianS(10., pow(.2,2));
+    auto measured_pos = gaussianS(11., pow(.1,2));
+    auto estimated_pos = updateODKF(predicted_pos, measured_pos);
+
+    std::cout << estimated_pos << std::endl;
+
+    // 
+    auto gn = gaussianS(10, 1);
+    auto gnxn = gn*gn;
+
+    // plot_gaussian_pdf(gn.mean,gn.var,xlim);
+    // plot_gaussian_pdf(gnxn.mean,gnxn.var,xlim);
+    // plt::show();
+
+//N (10.2, 1)×N (9.7, 1).
+    auto gLeft=gaussianS(10.2,1);
+    auto gRight=gaussianS(9.7,1);
+    //plot_products(gLeft,gRight,xlim);
+
+    // FIRST KALMAN FILTER
+    
+
+    return 0;
 
 }
