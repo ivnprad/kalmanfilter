@@ -328,7 +328,7 @@ namespace robotics{
         static_assert(ROWS==COLS, " Matrix must be square to compute determiant");
         T det = 0;
         if constexpr (ROWS==1){
-            det = at(0,0);    
+            det = at(0,0); 
         }else if constexpr (ROWS==2){
             det = at(0,0)*at(1,1)-at(0,1)*at(1,0);
         }else{
@@ -428,7 +428,7 @@ namespace robotics{
         return result;
     } 
 
-    // Matrix Multiplication
+    // ELEMENT-WISE Matrix Multiplication
     template <class T, size_t ROWS1, size_t COLS1, size_t COLS2>
     Matrix<T,ROWS1,COLS2> operator*(const Matrix<T,ROWS1,COLS1>& lhs, const Matrix<T,COLS1,COLS2>& rhs){
         Matrix<T,ROWS1,COLS2> result;
@@ -503,6 +503,11 @@ namespace robotics{
             Matrix<T,1,1> operator*(T scalar)const{
                 return Matrix<T,1,1>(*this)*=scalar;
             }
+
+            T getDeterminant()const{
+                return data[0][0];
+            }
+            
 
 
             T& at(size_t row, size_t col){

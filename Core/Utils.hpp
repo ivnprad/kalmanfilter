@@ -154,6 +154,36 @@ std::ostream& operator<<(std::ostream& stream, const std::vector<double>& other)
     return stream;
 }
 
+template<typename T=double>
+std::vector<T> operator-(const std::vector<T>& lhs, const std::vector<T>& rhs){
+    const size_t nELE=lhs.size();
+    assert(nELE==rhs.size());
+
+    std::vector<T> substraction;
+    substraction.reserve(nELE);
+    
+    for(size_t idx=0; idx<nELE;++idx){
+        substraction.emplace_back(lhs.at(idx)-rhs.at(idx));        
+    }
+
+    return substraction;
+}
+
+template<typename T=double>
+T operator*(const std::vector<T>& lhs, const std::vector<T>& rhs){
+    const size_t nELE=lhs.size();
+    assert(nELE==rhs.size());
+
+    T multiplication;
+    
+    for(size_t idx=0; idx<nELE;++idx){
+        multiplication+=lhs.at(idx)*rhs.at(idx);        
+    }
+
+    return multiplication;
+}
+
+
 // std::ostream& operator<<(std::ostream& stream, const gaussianS& other){
 //     stream << "mean " << other.mean << " variance "<< other.var << "\n";
 //     return stream;
@@ -177,6 +207,30 @@ std::vector<double> operator+(const std::vector<double>& vec, double scalar) {
     }
     return result;
 }
+
+
+/*SOLVER QUADRAITC EQUATION ax^2 + bx + c = 0:*/
+template<typename T=double>
+std::pair<T,T> solve_quadratic_equation(T a, T b, T c){
+    T discriminant = b*b-4*a*c;
+    if(discriminant<0){
+        return std::make_pair(0.0, 0.0);
+    }
+    else if (discriminant==0){
+        T root =-b/(2*a);
+        return std::make_pair(root,root);
+    }
+    else {
+        T root1 = (-b + sqrt(discriminant)) / (2*a);
+        T root2 = (-b - sqrt(discriminant)) / (2*a);
+        return std::make_pair(root1,root2);
+    } 
+
+}
+
+
+
+
 
 
 

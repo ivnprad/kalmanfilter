@@ -8,14 +8,18 @@
 #include "Core/matrix.hpp"
 #include "Core/constmatrix.hpp"
 #include "Core/data.hpp"
+#include "Core/dynamicMatrix.hpp"
 #include "Chapter2/discreteBayesFilter.hpp"
 #include "Chapter2/train.hpp"
 #include "Chapter3/probabilities.hpp"
 #include "Core/matplotlibcpp.h"
 #include "Chapter4/onedimension.hpp"
 #include "Chapter4/dogsimulation.hpp"
+#include "Chapter5/multivariateGaussians.hpp"
+
 
 using namespace robotics;
+//namespace plt = matplotlibcpp;
 
 int main()
 {
@@ -23,19 +27,22 @@ int main()
     
     Matrix<double, 1, 1> jolin= {{1.0}};
     Matrix<int,1,1> singleMat({{1}});
-    Matrix<int, 3, 3> mat2({{1, 2, 3},{4, 5, 6},{7, 8, 10}});
-    mat2+3.0;
-    std::cout << mat2<< std::endl;
-    int det1 = mat2.getDeterminant();
-    auto adjoint  = mat2.getAdjoint();
-    std::cout << "determinant " <<  mat2.getDeterminant() << std::endl;
-    std::cout << " adjugate " << mat2.getAdjugate() << std::endl;
-    std::cout << " inverse " << mat2.getInverse() << std::endl;
-    std::cout << " conver to double "<<  robotics::convert<double>(mat2)<< std::endl;
+    Matrix<int, 3, 3> mat2({{2, -3, 1},{2, 0, -1},{1, 4, 5}});
+    //mat2+3.0;
+    //std::cout << mat2<< std::endl;
+    // int det1 = mat2.getDeterminant();
+    // auto adjoint  = mat2.getAdjoint();
+
+    // std::cout << " minor " << mat2.getMinor(1,1) << std::endl;
+    // std::cout << "determinantYYYY " <<  mat2.getDeterminant() << std::endl;
+    // std::cout << " adjugate " << mat2.getAdjugate() << std::endl;
+    std::cout << " inverse mat2: " << mat2.getInverse() << std::endl;
+    // std::cout << " conver to double "<<  robotics::convert<double>(mat2)<< std::endl;
+
 
     /*basketball HEIGHT*/
 
-    // Matrix<double,1,2> meanHeight = meanColumnwise(basketballHeight);
+    Matrix<double,1,2> meanHeight = meanColumnwise(basketballHeight);
     // std::cout<< meanHeight <<std::endl;
 
     // Matrix<double,1,2> standarDeviation = standardDeviationColumnwise(basketballHeight);
@@ -274,7 +281,7 @@ int main()
 
 
     // CHAPTER 4   -----------------------------------------
-    namespace plt = matplotlibcpp;
+
     double itsMean = 10.0;
     double variance = 1.0;
     std::vector<double> xlim{4,16};
@@ -282,7 +289,7 @@ int main()
     //plt::show();
 
     constexpr size_t nElements = 500;
-    auto xs = range(nElements);
+    //auto xs = range(nElements);
     auto ys = randn(nElements)*0.1+10;
     // plt::plot(xs,ys);
     // plt::show();
@@ -315,9 +322,139 @@ int main()
     auto gRight=gaussianS(9.7,1);
     //plot_products(gLeft,gRight,xlim);
 
-    // FIRST KALMAN FILTER
+    // FIRST KALMAN FILTER ----------------------------------------
+    auto x = gaussianS(0,pow(20,2)); // dogposition HIGH VARIANCE
+    double process_var = 2; // 1 
+    double velocity = 1;
+    double dt = 1; // timestep in seconds
+    auto processModel= gaussianS(velocity*dt,process_var); // displacement to add to x
+    double sensor_var = pow(300,2); // 2 
+
+    // simulate dog and get measurements
+    //auto dog = Dogsimulation(x.mean,velocity,)
+
+    Dogsimulation dog(x.mean,velocity,sensor_var,process_var);
     
+    //create list of measurements
+    std::vector<double> zs,xs,predictions;
+    constexpr size_t nELE = 25;
+    for(size_t i=0;i<nELE;++i){
+        zs.emplace_back(dog.move_and_sense());
+    }
+
+    // plt::bar(zs);
+    // plt::plot(zs);
+    // plt::show();
+    for(const auto& z:zs){
+        // predict
+        const auto prior = predict(x,processModel);
+        // update
+        const auto likelihood = gaussianS(z, sensor_var);
+        x = updateODKF(likelihood,prior);
+
+        xs.push_back(x.mean);
+        predictions.push_back(prior.mean);
+
+        std::cout << " predict "<< prior.mean << " \tvar "<< prior.var ;
+        std::cout << "\tmeasurement "<< z <<  "\tupdate "<< x.mean << " \tvar "<< x.var << std::endl;
+
+    }
+
+    std::cout << " actual final positon "<< dog.getX()<< std::endl;
+    std::cout << " predicted final position"<< x.mean << std::endl;
+
+    auto xaxis = range(nELE);
+
+/*     plt::plot(xaxis,zs,"k-"); // measurement
+    plt::plot(xaxis,xs,"r-"); // estimates 
+    //plt::plot(xaxis,predictions,"b-"); // predictiosn
+    plt::show(); */
+
+    // INTRODUCTION TO DESIGNING A FILTER ------
+    double temp_change = 0;
+    double voltage_std = .13;
+    double voltProcessVar= pow(0.05,2);
+    double actual_voltage = 16.3;
+
+    auto voltX = gaussianS(25,1000); // initial state 
+    auto voltProcessModel = gaussianS(0,voltProcessVar); // temperature does not change*
+    constexpr size_t voltELE=50;
+    
+    std::vector<double> voltZS,voltXS,voltPredictions, voltPS;
+    voltXS.reserve(voltELE);
+    voltPredictions.reserve(voltELE);
+    voltPS.reserve(voltELE);
+
+    for(size_t i=0;i<voltELE;++i){
+        voltZS.emplace_back(volt(actual_voltage,voltage_std));
+    }
+
+    for(const auto& z:voltZS){
+        const auto prior = predict(voltX,voltProcessModel);
+                // update
+        const auto likelihood = gaussianS(z, pow(voltage_std,2));
+        voltX = updateODKF(likelihood,prior);
+
+        voltXS.push_back(voltX.mean);
+        voltPredictions.push_back(prior.mean);
+        voltPS.push_back(voltX.var);
+
+        std::cout << " predict "<< prior.mean << " \tvar "<< prior.var ;
+        std::cout << "\tmeasurement "<< z <<  "\tupdate "<< voltX.mean << " \tvar "<< voltX.var << std::endl;
+
+
+    }
+
+    // plt::plot(voltZS,"k-"); // measurement
+    // plt::plot(voltXS,"r-"); // estimates 
+    // //plt::plot(voltPredictions,"b-"); // predictiosn
+    // plt::show();
+
+    // plt::plot(voltPS);
+    // plt::show();
+
+    std::vector<double> W{70.1, 91.2, 59.5, 93.2, 53.5};
+    std::vector<double> H{1.8, 2.0, 1.7, 1.9, 1.6};
+
+    std::cout<< covariance(H,W)<<std::endl;
+
+
+    DynamicMatrix cov({{8.0,0.0},{0.0,3.0}});
+
+    std::cout << " determinant cov " << cov.getDeterminant()<< std::endl;
+    std::cout << " inverse cov "<< cov.getInverse() << std::endl;
+
+
+    std::vector<double> Mu{2., 7.};
+    std::vector<double> X1{2.5, 7.3};
+
+    std::cout << " x1-mu "<< X1-Mu << std::endl;
+
+    std::cout << mutlivariateGaussian(X1,Mu,cov) << std::endl;
+
+
+    double a = 1.0;
+    double b = -12.0;
+    double c = 31.0;
+    auto [root1,root2] = solve_quadratic_equation(a, b, c);
+
+    //std::cout << " root1: "<< root1 << " root2: " << root2 << std::endl;
+
+
+    //DynamicMatrix<double> covariance_matrix = {{10.0, -2.5}, {-2.5, 8.0}};
+    DynamicMatrix<double> covariance_matrix = {{2.0, 0}, {0, 20.0}};
+    //DynamicMatrix<double> covariance_matrix = {{2.0, 1.2}, {1.2, 2.0}};
+    auto [eigenvectors,eigenvalues] = calculate_eigenvectors(covariance_matrix);
+    std::cout  << eigenvectors << std::endl;
+    std::cout << eigenvalues << std::endl;
+    double v1_x = eigenvectors(0,0);
+    double v1_y = eigenvectors(0,1);
+    double v2_x = eigenvectors(1,0);
+    double v2_y = eigenvectors(1,1);
+    plot_ellipse(eigenvalues.at(0), eigenvalues.at(1), v1_x, v1_y, v2_x, v2_y, 1);
+ 
 
     return 0;
+
 
 }
