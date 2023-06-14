@@ -4,18 +4,22 @@
 #include <map>
 #include <functional>
 #include <tuple>
-#include "Chapter1/Kalmanfilter.hpp"
+
 #include "Core/matrix.hpp"
 #include "Core/constmatrix.hpp"
 #include "Core/data.hpp"
+#include "Core/matplotlibcpp.h"
 #include "Core/dynamicMatrix.hpp"
+#include "Chapter1/Kalmanfilter.hpp"
 #include "Chapter2/discreteBayesFilter.hpp"
 #include "Chapter2/train.hpp"
 #include "Chapter3/probabilities.hpp"
-#include "Core/matplotlibcpp.h"
 #include "Chapter4/onedimension.hpp"
 #include "Chapter4/dogsimulation.hpp"
 #include "Chapter5/multivariateGaussians.hpp"
+#include "Chapter6/MKalmanfilter.hpp"
+#include "Chapter6/Common.hpp"
+#include "Chapter8/possensor.hpp"
 
 
 using namespace robotics;
@@ -432,6 +436,7 @@ int main()
 
     std::cout << mutlivariateGaussian(X1,Mu,cov) << std::endl;
 
+    std::cout << " EIGEN VECTORS "<< std::endl;
 
     double a = 1.0;
     double b = -12.0;
@@ -442,19 +447,276 @@ int main()
 
 
     //DynamicMatrix<double> covariance_matrix = {{10.0, -2.5}, {-2.5, 8.0}};
-    DynamicMatrix<double> covariance_matrix = {{2.0, 0}, {0, 20.0}};
-    //DynamicMatrix<double> covariance_matrix = {{2.0, 1.2}, {1.2, 2.0}};
-    auto [eigenvectors,eigenvalues] = calculate_eigenvectors(covariance_matrix);
-    std::cout  << eigenvectors << std::endl;
-    std::cout << eigenvalues << std::endl;
-    double v1_x = eigenvectors(0,0);
-    double v1_y = eigenvectors(0,1);
-    double v2_x = eigenvectors(1,0);
-    double v2_y = eigenvectors(1,1);
-    plot_ellipse(eigenvalues.at(0), eigenvalues.at(1), v1_x, v1_y, v2_x, v2_y, 1);
- 
+    //DynamicMatrix<double> covariance_matrix = {{2.0, 0}, {0, 20.0}};
+    //DynamicMatrix<double> covariance_matrix = {{20.0, 0}, {0, 2.0}};
+    DynamicMatrix<double> covariance_matrix = {{18.5249, 135.701}, {135.701, 1092.29 }};
+
+    //DynamicMatrix<double> covariance_matrix = {{2.0, 1.2}, {1.2, 20.0}};
+    // auto [eigenvectors,eigenvalues] = calculate_eigenvectors(covariance_matrix);
+    // std::cout  << eigenvectors << std::endl;
+    // std::cout << eigenvalues << std::endl;
+    //plot_ellipse(eigenvalues,eigenvectors,2);
+
+
+
+    std::vector<double> max_temp{200, 250, 300, 400, 450, 500};
+    std::vector<double> lifespan{10, 9.7, 5, 5.4, 4.3, 0.3};
+    auto cov_mat  = covariance(max_temp,lifespan);
+    // auto [eigenvectors,eigenvalues] = calculate_eigenvectors(cov_mat);
+    // std::cout  << eigenvectors << std::endl;
+    // std::cout << eigenvalues << std::endl;
+    //plot_ellipse(eigenvalues,eigenvectors,2);
+
+    DynamicMatrix P0 = {{6.0,0.0}, {0.0,6.0 }};
+    DynamicMatrix U0 = {{10.0}, {10.0}};
+    DynamicMatrix P1 = {{2.0, 1.9}, {1.9, 2.0 }};
+    DynamicMatrix U1 = {{10.0}, {10.0}};
+
+    auto jolin1 = P0^U0;
+    std::cout << jolin1 << std::endl;
+    // return 0;
+
+    auto [U,E] = multiply_multivariate(U0,P0,U1,P1);
+
+    std::cout << " U and E "<< std::endl;
+
+    std::cout << U  << std::endl;
+    std::cout << E << std::endl;
+
+
+    //plot_ellipse(E,U,1);
+
+    DynamicMatrix P3 = {{2.0, -1.9}, {-1.9, 2.2}};
+    //plot_ellipse(P3,U,1);
+
+    auto [U2,E1] = multiply_multivariate(U,E,U,P3);
+    //plot_ellipse(E1,U2,1);
+
+    // DynamicMatrix covX({{8.0,1.9},{1.9,8.0}});
+
+    // std::cout << covX.getInverse() << std::endl;
+    // std::cout << covX.getDeterminant() << std::endl;
+
+    /*---------------------- CHAPTER 6:  MULTIVARIATE KALMAN FILTER ------------------- */
+
+    //if we wanted to specify a position of 10.0 m and a velocity of 4.5 m/s, 
+    auto x_state = DynamicMatrix({{10.0,4.5}}).getTransposed();
+
+    //Design State Covariance
+    /*We need to set the variances to reasonable values. 
+    For example, we may choose σ2𝚙𝚘𝚜=500m2
+    if we are quite uncertain about the initial position. 
+    Top speed for a dog is around 21 m/s, 
+    so in the absence of any other information about the velocity we can set 3σ𝚟𝚎𝚕=21
+    , or σ2𝚟𝚎𝚕=72=49 */
+
+    auto P = DynamicMatrix({{500.0, 0.0}, {0.0, 49.0}});
+
+    //Design the Process Model
+    /*
+    x = x + x˙Δt
+    x = x˙
+    */
+    double DT = 0.1;
+    auto F = DynamicMatrix({{1.0, DT}, {0.0, 1.0}});
+    DynamicMatrix Q(1,1);
+
+    for (size_t cnt=0; cnt<5; ++cnt){
+        auto [_x_state,_P] = predictMKF(x_state,P,F,Q);
+        x_state = _x_state;
+        P = _P;
+        std::cout << "_x_state " <<  x_state << std::endl;
+    }
+    
+    std::cout << "_P: " << P  << std::endl;
+
+
+    // P(0,1) =0.0;
+    // P(1,0) =0.0;
+
+    //plot_ellipse(P);
+
+    const size_t dim = 2;
+    const double _dt=1.0;
+    const double var=2.35;
+    auto itsQ = Q_discrete_white_noise(dim,_dt,var);
+    std::cout << " Q " << std::endl;
+    std::cout << itsQ << std::endl;
+
+    P=DynamicMatrix({{545.,150.},{150.,500.}});
+    F=DynamicMatrix({{1.,0.3},{0.,1.}});
+
+    auto [_x_state,_P] = predictMKF(x_state,P,F,itsQ);
+    std::cout << "_x_State: " << _x_state << std::endl;
+    std::cout << " _xx P " << _P << std::endl;
+    //std::cout << F*2.35 << std::endl;
+    // Design the Control Function
+    /*
+    */
+
+    // UPDATE STEP
+
+    //Design the Measurement Function
+    //y=z−Hx
+    DynamicMatrix<double> _H({{1,0}});
+
+    //Design the Measurement
+    DynamicMatrix<double> R({{5}});
+
+    //
+    x_state(0,0)=1.016;
+    x_state(1,0)=-2.805;
+
+    P(0,0)=1.665;
+    P(0,1)=0.773;
+    P(1,0)=0.773;
+    P(1,1)=157.382;
+
+    DynamicMatrix<double> z({{1.0}});
+
+
+
+    auto [x_state_,P_] = updateMKF(x_state,P,z,R,_H);
+
+    // std::cout << " x_state_" << x_state_ << std::endl;
+    // std::cout << " P_ " << P_ << std::endl;
+    // DynamicMatrix<double> identity = DynamicMatrix<double>::IdentityMatrixCreator<>::create(3, 3);
+
+    // std::cout << identity << std::endl;
+
+    MKalmanFilter dog_filter(2,1);
+
+    std::cout << dog_filter.getX() << std::endl;
+    std::cout << dog_filter.getR() << std::endl;
+    std::cout << dog_filter.getQ() << std::endl;
+
+
+    /* POS VEL FILTER */
+
+    double dt_ = .1;
+    DynamicMatrix<double> x_({{0,0}}); // 0,0
+    DynamicMatrix<double> _P_({{500}}); //500 
+    DynamicMatrix<double> R_({{5}}); // 5
+    DynamicMatrix<double> Q_({{0.02}}); // 0.1
+    auto uniKF = univariate_filter( DynamicMatrix<double>({{1.0}}), _P_, R_, Q_);
+
+    const double _vel_ =1.0;
+    double pos =0.0; // true position
+    std::vector<double> xs_,xs1,xs2;
+    for (size_t i=0; i<100; ++i){
+        pos += _vel_;
+        xs_.push_back(pos);
+        uniKF.predict();
+
+        //
+        const double z = pos + myRandom(-1.0,1.0)*sqrt(R(0,0));
+        uniKF.update(DynamicMatrix<double>({{z}}),uniKF.getR(),uniKF.getH());
+
+        xs1.push_back(uniKF.getX()(0,0));
+
+    }
+
+    namespace plt = matplotlibcpp;
+    // plt::plot(xs_); //track
+    // plt::plot(xs1); //measurement
+    // plt::show();
+
+    auto itsKF = pos_vel_filter(x_,_P_,R_,Q_,dt_);
+    std::cout << " print KF " << std::endl;
+    std::cout << itsKF << std::endl;
+
+    _P_ = DynamicMatrix<double> ({{500.0,0.0},{0.0,49.0}});
+    R_(0,0)=10;
+    Q_(0,0)=0.01;
+    x_=DynamicMatrix<double> ({{0.0},{0.0}});
+    dt = 1.0;
+
+
+    //run(x_, _P_, R_, Q_,dt, std::vector<double> (0), std::vector<double> (0), 50);
+
+
+
+    /******** CHAPTER 8 **********/
+    // std::vector<double> pos_vec={4,3};
+    // std::vector<double> vel_vec={2,1};
+    PosSensor itsPosSensor({4,3},{2,1},1.0);
+
+    std::vector<DynamicMatrix<double>> ps;
+    std::vector<double> itsX,itsY;
+    for (size_t i=0; i<50;++i){
+        const auto sensorPos = itsPosSensor.read();
+        ps.push_back(sensorPos);
+        itsX.push_back(sensorPos(0,0));
+        itsY.push_back(sensorPos(1,0));
+    }
+    //plt::plot(itsX,itsY);
+    //plt::scatter(itsX,itsY);
+    //plt::show();
+
+
+
+    //Design State Transition Function
+    MKalmanFilter tracker(4,2);
+    const double _dt_=1.0; // time step 
+
+    //Design State Transition Function 4x4
+    tracker.setF(DynamicMatrix<double>({{1,_dt_,0,0},
+                                        {0,1,0,0},
+                                        {0,0,1,_dt_},
+                                        {0,0,0,1}}));
+
+    //Design the Process Noise Matrix Q 4x4 assume the noise is a discrete time Wiener process
+    const size_t dim_q = 2;
+    double Q_std=0.04;
+    const double var_q=0.001;
+    auto _Q_ = Q_discrete_white_noise(dim_q,_dt_,pow(Q_std,2));
+
+    const auto dQ= diagonalBlock(_Q_,_Q_);
+
+    std::cout << " dQ " << dQ << std::endl;
+    tracker.setQ(dQ);
+
+
+    //Design the Control Function B IN THIS CASE ZERO
+
+    //Design the Measurement Function H 2x4
+    tracker.setH(DynamicMatrix<double>({{1.0/0.3048, 0.0, 0.0, 0.0},
+                                        {0.0,0.0,1.0/0.3048, 0.0}}));
+
+    //Design the Measurement Noise Matrix
+    tracker.setH(DynamicMatrix<double>({{5.0, 0.0},
+                                        {0.0, 5.0}}));  
+
+    //Initial Conditions
+    const auto init_state = DynamicMatrix<double>({{0.0,0.0,0.0,0.0}}).getTransposed();
+    tracker.setX(init_state);
+
+    auto eye = DynamicMatrix<double>::IdentityMatrixCreator<>::create(4);
+    auto itsP_ =  eye*500;   
+
+    std::cout << " itsP " << itsP_ << std::endl;   
+    tracker.setP(itsP_); 
+
+    double R_std = 0.35;   
+
+    //simulate robot movement
+    size_t _N_=30;
+    PosSensor sensor({0,0},{2,.2},R_std); 
+
+    ps.clear();
+    itsX.clear();
+    itsY.clear();
+
+    for (size_t i=0; i<_N_;++i){
+        const auto sensorPos = sensor.read();
+        ps.push_back(sensorPos);
+        itsX.push_back(sensorPos(0,0));
+        itsY.push_back(sensorPos(1,0));
+    }    
+
+    plt::scatter(itsX,itsY);
+    plt::show();
 
     return 0;
-
 
 }
